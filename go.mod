@@ -1,4 +1,4 @@
-module github.com/geraud22/go-mqtt-connector
+module github.com/geraud22/mqtt_connector
 
 go 1.22
 
