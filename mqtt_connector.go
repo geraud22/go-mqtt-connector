@@ -11,7 +11,7 @@ import (
 )
 
 var config = cfy.Get("config")
-var MqttClient mqtt.Client
+var Client mqtt.Client
 var PayloadChannel = make(chan []byte)
 
 var messagePubHandler mqtt.MessageHandler = func(client mqtt.Client, msg mqtt.Message) {
