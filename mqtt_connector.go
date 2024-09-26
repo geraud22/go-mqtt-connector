@@ -15,7 +15,6 @@ var Client mqtt.Client
 var PayloadChannel = make(chan []byte)
 
 var messagePubHandler mqtt.MessageHandler = func(client mqtt.Client, msg mqtt.Message) {
-	fmt.Printf("\nReceived message")
 	PayloadChannel <- msg.Payload()
 }
 
