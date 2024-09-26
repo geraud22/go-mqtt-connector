@@ -41,14 +41,14 @@ func Connect() {
 	opts.SetDefaultPublishHandler(messagePubHandler)
 	opts.OnConnect = connectHandler
 	opts.OnConnectionLost = connectLostHandler
-	MqttClient = mqtt.NewClient(opts)
-	if token := MqttClient.Connect(); token.Wait() && token.Error() != nil {
+	Client = mqtt.NewClient(opts)
+	if token := Client.Connect(); token.Wait() && token.Error() != nil {
 		log.Fatalf("Error connecting to MQTT: %v", token.Error())
 	}
 }
 
 func Sub(topicToSub string) error {
-	token := MqttClient.Subscribe(topicToSub, 1, nil)
+	token := Client.Subscribe(topicToSub, 1, nil)
 	if ok := token.WaitTimeout(10 * time.Second); !ok {
 		return errors.New("failed to subscribe to topic: " + topicToSub)
 	}
