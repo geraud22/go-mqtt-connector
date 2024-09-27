@@ -1,6 +1,7 @@
 package mqtt_connector
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -10,8 +11,8 @@ import (
 	cfy "github.com/geraud22/config-from-yaml"
 )
 
-var config = cfy.Get("config")
 var Client mqtt.Client
+var config = cfy.Get("config")
 var handlers = make(map[string]SubscriptionHandler)
 
 var messagePubHandler mqtt.MessageHandler = func(client mqtt.Client, msg mqtt.Message) {
@@ -47,12 +48,14 @@ func (h *Handler) GetChannel() <-chan []byte {
 	return h.payloadChannel
 }
 
-func NewHandler() *Handler {
+func newHandler() *Handler {
 	return &Handler{
 		payloadChannel: make(chan []byte),
 	}
 }
 
+// Connect is responsible for connecting the global mqtt.Client.
+// It will retrieve the connection information from the client project's config.yml
 func Connect() {
 	var broker = config.GetString("MQTT.Broker")
 	var port = config.GetInt("MQTT.Port")
@@ -74,8 +77,17 @@ func Connect() {
 	}
 }
 
-func Sub(topicToSub string) (*Handler, error) {
-	handler := NewHandler()
+// Sub will subscribe to an MQTT topic, only if the client connection has already been established.
+//
+// Parameters:
+// - topicToSub: The string representing the MQTT topic to subscribe to.
+//
+// Returns:
+//   - SubscriptionHandler: An interface which provides a channel where incoming message payloads will be sent,
+//     via the package variable messagePubHandler
+//   - Error: If the request to subscribe to the given topic times out after 10 seconds, will return error.
+func Sub(topicToSub string) (SubscriptionHandler, error) {
+	handler := newHandler()
 	handlers[topicToSub] = handler
 	token := Client.Subscribe(topicToSub, 1, nil)
 	if ok := token.WaitTimeout(10 * time.Second); !ok {
@@ -83,4 +95,36 @@ func Sub(topicToSub string) (*Handler, error) {
 	}
 	fmt.Printf("Subscribed to topic: %s", topicToSub)
 	return handler, nil
+}
+
+// AsyncPayloadHandler listens on the channel from the given SubscriptionHandler Interface
+// and processes incoming MQTT payloads asynchronously using the provided processFunc.
+//
+// It continues running until the context is canceled or an error is encountered.
+//
+// Parameters:
+// - ctx: A context.WithCancel used to control the lifetime of the handler. It should be cancelled to stop the handler gracefully.
+// - handler: A SubscriptionHandler that manages the channel through which payloads are received.
+// - processFunc: A client-defined function that takes a byte slice (representing the MQTT payload) and processes it.
+//
+// Returns:
+// - An error if something goes wrong during processing.
+func AsyncPayloadHandler(ctx context.Context, handler SubscriptionHandler, processFunc func([]byte) error) error {
+	errChan := make(chan error)
+	for {
+		select {
+		case payload := <-handler.GetChannel():
+			go func(payload []byte) {
+				if err := processFunc(payload); err != nil {
+					errChan <- err
+				}
+			}(payload)
+		case err := <-errChan:
+			return fmt.Errorf("payload handler received error: %v", err)
+		case <-ctx.Done():
+			log.Println("payload handler received shutdown signal")
+			close(errChan)
+			return nil
+		}
+	}
 }
