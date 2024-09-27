@@ -12,10 +12,14 @@ import (
 
 var config = cfy.Get("config")
 var Client mqtt.Client
-var PayloadChannel = make(chan []byte)
+var handlers = make(map[string]SubscriptionHandler)
 
 var messagePubHandler mqtt.MessageHandler = func(client mqtt.Client, msg mqtt.Message) {
-	PayloadChannel <- msg.Payload()
+	if handler, exists := handlers[msg.Topic()]; !exists {
+		handler.SendMessageToChannel(msg.Payload())
+	} else {
+		log.Printf("No handler registered for topic: %s", msg.Topic())
+	}
 }
 
 var connectHandler mqtt.OnConnectHandler = func(client mqtt.Client) {
@@ -24,6 +28,29 @@ var connectHandler mqtt.OnConnectHandler = func(client mqtt.Client) {
 
 var connectLostHandler mqtt.ConnectionLostHandler = func(client mqtt.Client, err error) {
 	fmt.Printf("Connection lost: %v", err)
+}
+
+type SubscriptionHandler interface {
+	SendMessageToChannel(payload []byte)
+	GetChannel() <-chan []byte
+}
+
+type Handler struct {
+	payloadChannel chan []byte
+}
+
+func (h *Handler) SendMessageToChannel(payload []byte) {
+	h.payloadChannel <- payload
+}
+
+func (h *Handler) GetChannel() <-chan []byte {
+	return h.payloadChannel
+}
+
+func NewHandler() *Handler {
+	return &Handler{
+		payloadChannel: make(chan []byte),
+	}
 }
 
 func Connect() {
@@ -47,11 +74,13 @@ func Connect() {
 	}
 }
 
-func Sub(topicToSub string) error {
+func Sub(topicToSub string) (*Handler, error) {
+	handler := NewHandler()
+	handlers[topicToSub] = handler
 	token := Client.Subscribe(topicToSub, 1, nil)
 	if ok := token.WaitTimeout(10 * time.Second); !ok {
-		return errors.New("failed to subscribe to topic: " + topicToSub)
+		return nil, errors.New("failed to subscribe to topic: " + topicToSub)
 	}
 	fmt.Printf("Subscribed to topic: %s", topicToSub)
-	return nil
+	return handler, nil
 }
