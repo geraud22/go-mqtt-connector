@@ -16,7 +16,7 @@ var config = cfy.Get("config")
 var handlers = make(map[string]SubscriptionHandler)
 
 var messagePubHandler mqtt.MessageHandler = func(client mqtt.Client, msg mqtt.Message) {
-	if handler, exists := handlers[msg.Topic()]; !exists {
+	if handler, exists := handlers[msg.Topic()]; exists {
 		handler.SendMessageToChannel(msg.Payload())
 	} else {
 		log.Printf("No handler registered for topic: %s", msg.Topic())
