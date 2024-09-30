@@ -19,7 +19,7 @@ var messagePubHandler mqtt.MessageHandler = func(client mqtt.Client, msg mqtt.Me
 	if handler, exists := handlers[msg.Topic()]; exists {
 		handler.SendMessageToChannel(msg.Payload())
 	} else {
-		log.Printf("No handler registered for topic: %s", msg.Topic())
+		log.Printf("\nNo handler registered for topic: %s", msg.Topic())
 	}
 }
 
@@ -28,7 +28,7 @@ var connectHandler mqtt.OnConnectHandler = func(client mqtt.Client) {
 }
 
 var connectLostHandler mqtt.ConnectionLostHandler = func(client mqtt.Client, err error) {
-	fmt.Printf("Connection lost: %v", err)
+	fmt.Printf("\nConnection lost: %v", err)
 }
 
 type SubscriptionHandler interface {
@@ -93,7 +93,7 @@ func Sub(topicToSub string) (SubscriptionHandler, error) {
 	if ok := token.WaitTimeout(10 * time.Second); !ok {
 		return nil, errors.New("failed to subscribe to topic: " + topicToSub)
 	}
-	fmt.Printf("Subscribed to topic: %s", topicToSub)
+	fmt.Printf("\nSubscribed to topic: %s", topicToSub)
 	return handler, nil
 }
 
