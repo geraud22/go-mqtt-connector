@@ -97,7 +97,7 @@ func Sub(topicToSub string) (SubscriptionHandler, error) {
 	return handler, nil
 }
 
-// AsyncPayloadHandler listens on the channel from the given SubscriptionHandler Interface
+// AsyncPayloadHandler listens on the channel of the given SubscriptionHandler Interface
 // and processes incoming MQTT payloads asynchronously using the provided processFunc.
 //
 // It continues running until the context is canceled or an error is encountered.
@@ -127,4 +127,25 @@ func AsyncPayloadHandler(ctx context.Context, handler SubscriptionHandler, proce
 			return nil
 		}
 	}
+}
+
+// PayloadHandler listens on the channel of the given SubscriptionHandler Interface
+// and processes the incoming MQTT payload using the provided processFunc.
+//
+// It will only process one payload before exiting.
+//
+// Parameters:
+// - handler: A SubscriptionHandler that manages the channel through which a payload is received.
+// - processFunc: A client-defined function that takes a byte slice (representing the MQTT payload) and processes it.
+//
+// Returns:
+// - An error if something goes wrong during processing.
+func PayloadHandler(handler SubscriptionHandler, processFunc func([]byte) error) error {
+	select {
+	case payload := <-handler.GetChannel():
+		if err := processFunc(payload); err != nil {
+			return fmt.Errorf("error processing payload: %v", err)
+		}
+	}
+	return nil
 }
