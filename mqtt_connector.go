@@ -140,10 +140,15 @@ func AsyncPayloadHandler(ctx context.Context, handler SubscriptionHandler, proce
 //
 // Returns:
 // - An error if something goes wrong during processing.
-func PayloadHandler(handler SubscriptionHandler, processFunc func([]byte) error) error {
-	payload := <-handler.GetChannel()
-	if err := processFunc(payload); err != nil {
-		return fmt.Errorf("error processing payload: %v", err)
+func PayloadHandler(ctx context.Context, handler SubscriptionHandler, processFunc func([]byte) error) error {
+	select {
+	case payload := <-handler.GetChannel():
+		if err := processFunc(payload); err != nil {
+			return fmt.Errorf("error processing payload: %v", err)
+		}
+	case <-ctx.Done():
+		log.Println("payload handler received shutdown signal")
+		return nil
 	}
 	return nil
 }
