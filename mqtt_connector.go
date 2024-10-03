@@ -20,16 +20,16 @@ var messagePubHandler mqtt.MessageHandler = func(client mqtt.Client, msg mqtt.Me
 	if handler, exists := handlers[msg.Topic()]; exists {
 		handler.SendMessageToChannel(msg.Payload())
 	} else {
-		log.Printf("\nNo handler registered for topic: %s", msg.Topic())
+		log.Printf("No handler registered for topic: %s\n", msg.Topic())
 	}
 }
 
 var connectHandler mqtt.OnConnectHandler = func(client mqtt.Client) {
-	fmt.Println("Client Connected")
+	fmt.Println("Client Connected\n")
 }
 
 var connectLostHandler mqtt.ConnectionLostHandler = func(client mqtt.Client, err error) {
-	fmt.Printf("\nConnection lost: %v", err)
+	fmt.Printf("Connection lost: %v\n", err)
 }
 
 type SubscriptionHandler interface {
@@ -100,7 +100,7 @@ func Sub(topicToSub string) (SubscriptionHandler, error) {
 	if ok := token.WaitTimeout(10 * time.Second); !ok {
 		return nil, errors.New("failed to subscribe to topic: " + topicToSub)
 	}
-	fmt.Printf("\nSubscribed to topic: %s", topicToSub)
+	fmt.Printf("Subscribed to topic: %s\n", topicToSub)
 	return handlers[topicToSub], nil
 }
 
@@ -127,7 +127,7 @@ func AsyncPayloadHandler(ctx context.Context, handler SubscriptionHandler, proce
 				}
 			}(payload)
 		case <-ctx.Done():
-			log.Println("payload handler received shutdown signal")
+			log.Println("payload handler received shutdown signal\n")
 			wg.Wait()
 			close(handler.GetErrorChannel())
 			return
