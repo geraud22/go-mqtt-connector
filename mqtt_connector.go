@@ -34,10 +34,12 @@ var connectLostHandler mqtt.ConnectionLostHandler = func(client mqtt.Client, err
 type SubscriptionHandler interface {
 	SendMessageToChannel(payload []byte)
 	GetChannel() <-chan []byte
+	GetErrorChannel() chan error
 }
 
 type Handler struct {
 	payloadChannel chan []byte
+	errorChannel   chan error
 }
 
 func (h *Handler) SendMessageToChannel(payload []byte) {
@@ -46,6 +48,10 @@ func (h *Handler) SendMessageToChannel(payload []byte) {
 
 func (h *Handler) GetChannel() <-chan []byte {
 	return h.payloadChannel
+}
+
+func (h *Handler) GetErrorChannel() chan error {
+	return h.errorChannel
 }
 
 func newHandler() *Handler {
@@ -110,20 +116,17 @@ func Sub(topicToSub string) (SubscriptionHandler, error) {
 // Returns:
 // - An error if something goes wrong during processing.
 func AsyncPayloadHandler(ctx context.Context, handler SubscriptionHandler, processFunc func([]byte) error) error {
-	errChan := make(chan error)
 	for {
 		select {
 		case payload := <-handler.GetChannel():
 			go func(payload []byte) {
 				if err := processFunc(payload); err != nil {
-					errChan <- err
+					handler.GetErrorChannel() <- err
 				}
 			}(payload)
-		case err := <-errChan:
-			return fmt.Errorf("payload handler received error: %v", err)
 		case <-ctx.Done():
 			log.Println("payload handler received shutdown signal")
-			close(errChan)
+			close(handler.GetErrorChannel())
 			return nil
 		}
 	}
