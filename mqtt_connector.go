@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"sync"
 	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
@@ -57,6 +58,7 @@ func (h *Handler) GetErrorChannel() chan error {
 func newHandler() *Handler {
 	return &Handler{
 		payloadChannel: make(chan []byte),
+		errorChannel:   make(chan error),
 	}
 }
 
@@ -93,41 +95,42 @@ func Connect() {
 //     via the package variable messagePubHandler
 //   - Error: If the request to subscribe to the given topic times out after 10 seconds, will return error.
 func Sub(topicToSub string) (SubscriptionHandler, error) {
-	handler := newHandler()
-	handlers[topicToSub] = handler
+	handlers[topicToSub] = newHandler()
 	token := Client.Subscribe(topicToSub, 1, nil)
 	if ok := token.WaitTimeout(10 * time.Second); !ok {
 		return nil, errors.New("failed to subscribe to topic: " + topicToSub)
 	}
 	fmt.Printf("\nSubscribed to topic: %s", topicToSub)
-	return handler, nil
+	return handlers[topicToSub], nil
 }
 
 // AsyncPayloadHandler listens on the channel of the given SubscriptionHandler Interface
 // and processes incoming MQTT payloads asynchronously using the provided processFunc.
 //
-// It continues running until the context is canceled or an error is encountered.
+// It continues running until the context is canceled.
+// Errors are sent to the handler's error channel.
 //
 // Parameters:
 // - ctx: A context.WithCancel used to control the lifetime of the handler. It should be cancelled to stop the handler gracefully.
 // - handler: A SubscriptionHandler that manages the channel through which payloads are received.
 // - processFunc: A client-defined function that takes a byte slice (representing the MQTT payload) and processes it.
-//
-// Returns:
-// - An error if something goes wrong during processing.
-func AsyncPayloadHandler(ctx context.Context, handler SubscriptionHandler, processFunc func([]byte) error) error {
+func AsyncPayloadHandler(ctx context.Context, handler SubscriptionHandler, processFunc func([]byte) error) {
+	var wg sync.WaitGroup
 	for {
 		select {
 		case payload := <-handler.GetChannel():
+			wg.Add(1)
 			go func(payload []byte) {
+				defer wg.Done()
 				if err := processFunc(payload); err != nil {
 					handler.GetErrorChannel() <- err
 				}
 			}(payload)
 		case <-ctx.Done():
 			log.Println("payload handler received shutdown signal")
+			wg.Wait()
 			close(handler.GetErrorChannel())
-			return nil
+			return
 		}
 	}
 }
