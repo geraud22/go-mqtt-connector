@@ -123,11 +123,15 @@ func AsyncPayloadHandler(ctx context.Context, handler SubscriptionHandler, proce
 			go func(payload []byte) {
 				defer wg.Done()
 				if err := processFunc(payload); err != nil {
-					handler.GetErrorChannel() <- err
+					select {
+					case handler.GetErrorChannel() <- err:
+					case <-ctx.Done():
+						return
+					}
 				}
 			}(payload)
 		case <-ctx.Done():
-			log.Println("payload handler received shutdown signal\n")
+			log.Println("payload handler received shutdown signal")
 			wg.Wait()
 			close(handler.GetErrorChannel())
 			return
