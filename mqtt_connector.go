@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strings"
 	"sync"
 	"time"
 
@@ -15,12 +16,35 @@ import (
 var Client mqtt.Client
 var config = cfy.Get("config")
 var handlers = make(map[string]SubscriptionHandler)
+var match = func(wildcard, topic string) bool {
+	wildcardParts := strings.Split(wildcard, "/")
+	topicParts := strings.Split(topic, "/")
+	if len(wildcardParts) != len(topicParts) {
+		return false
+	}
+	for i, wildcardPart := range wildcardParts {
+		if wildcardPart == "+" {
+			continue
+		}
+		if wildcardPart == topicParts[i] {
+			continue
+		}
+		return false
+	}
+	return true
+}
 
 var messagePubHandler mqtt.MessageHandler = func(client mqtt.Client, msg mqtt.Message) {
+	topic := msg.Topic()
 	if handler, exists := handlers[msg.Topic()]; exists {
 		handler.SendMessageToChannel(msg.Payload())
-	} else {
-		log.Printf("No handler registered for topic: %s\n", msg.Topic())
+		return
+	}
+	for wildcard, handler := range handlers {
+		if match(wildcard, topic) {
+			handler.SendMessageToChannel(msg.Payload())
+			return
+		}
 	}
 }
 
